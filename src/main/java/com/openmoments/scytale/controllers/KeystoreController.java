@@ -8,6 +8,8 @@ import com.openmoments.scytale.entities.Client;
 import com.openmoments.scytale.entities.Keystore;
 import com.openmoments.scytale.exceptions.KeystoreNotFoundException;
 import com.openmoments.scytale.repositories.KeystoreRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.ExampleMatcher;
 import org.springframework.hateoas.EntityModel;
@@ -17,7 +19,9 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.springframework.data.domain.ExampleMatcher.GenericPropertyMatchers.exact;
@@ -25,6 +29,7 @@ import static org.springframework.data.domain.ExampleMatcher.GenericPropertyMatc
 @RestController
 @RequestMapping("/api/v1/keystores")
 public class KeystoreController {
+    private static final Logger LOG = LoggerFactory.getLogger(KeystoreController.class);
 
     private final KeystoreRepository keystoreRepository;
     private final AuthenticatedClient authenticatedClient;
@@ -47,6 +52,35 @@ public class KeystoreController {
 
         EntityModel<Keystore> resource = assembler.toModel(foundKeystore.get());
         MappingJacksonValue mapping = new MappingJacksonValue(resource);
+        mapping.setFilters(CLIENT_FILTER_PROVIDER);
+
+        return mapping;
+    }
+
+    @RequestMapping(path = "search", method = RequestMethod.GET)
+    @PreAuthorize("isAuthenticated()")
+    public MappingJacksonValue search(@RequestParam Map<String, String> queryParameters) {
+        Client client = authenticatedClient.getClient();
+
+        AtomicReference<String> keystoreName = new AtomicReference<>("");
+        queryParameters.forEach((k, v) -> {
+            if (k.equalsIgnoreCase("name")) {
+                keystoreName.set(v);
+            }
+        });
+
+        List<Keystore> temp = keystoreRepository.findByNameContaining(keystoreName.get())
+                .stream()
+                .filter(keystore -> keystore.getClient().getId().equals(client.getId()))
+                .collect(Collectors.toList());
+
+        List<EntityModel<Keystore>> keystores = keystoreRepository.findByNameContaining(keystoreName.get())
+                .stream()
+                .filter(keystore -> keystore.getClient().getId().equals(client.getId()))
+                .map(assembler::toModel)
+                .collect(Collectors.toList());
+
+        MappingJacksonValue mapping = new MappingJacksonValue(keystores);
         mapping.setFilters(CLIENT_FILTER_PROVIDER);
 
         return mapping;
