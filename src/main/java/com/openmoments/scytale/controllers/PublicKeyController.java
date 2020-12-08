@@ -1,5 +1,7 @@
 package com.openmoments.scytale.controllers;
 
+import com.openmoments.scytale.authentication.AuthenticatedClient;
+import com.openmoments.scytale.entities.Client;
 import com.openmoments.scytale.entities.Keystore;
 import com.openmoments.scytale.entities.PublicKey;
 import com.openmoments.scytale.exceptions.ClientNotFoundException;
@@ -11,6 +13,7 @@ import org.springframework.data.domain.Example;
 import org.springframework.data.domain.ExampleMatcher;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.http.converter.json.MappingJacksonValue;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,34 +28,19 @@ public class PublicKeyController {
     private final KeystoreRepository keystoreRepository;
     private final PublicKeyRepository publicKeyRepository;
     private final PublicKeyModelAssembler assembler;
+    private final AuthenticatedClient authenticatedClient;
 
-    public PublicKeyController(PublicKeyRepository publicKeyRepository, KeystoreRepository keystoreRepository, PublicKeyModelAssembler assembler) {
+    public PublicKeyController(PublicKeyRepository publicKeyRepository, KeystoreRepository keystoreRepository, PublicKeyModelAssembler assembler, AuthenticatedClient authenticatedClient) {
         this.publicKeyRepository = publicKeyRepository;
         this.keystoreRepository = keystoreRepository;
         this.assembler = assembler;
+        this.authenticatedClient = authenticatedClient;
     }
 
-    @GetMapping("/clients/{clientId}/keystores/{keystoreId}/keys/{id}")
-    MappingJacksonValue one(@PathVariable Long clientId, @PathVariable Long keystoreId, @PathVariable Long id) {
-        // TODO: Protect with client API key
-
-        Keystore keystore = keystoreRepository.findById(keystoreId).orElseThrow(() -> new KeystoreNotFoundException(keystoreId));
-        if (!keystore.getClient().getId().equals(clientId)) {
-            throw new ClientNotFoundException(clientId);
-        }
-
-        PublicKey publicKey = new PublicKey();
-        publicKey.setKeystore(keystore);
-        publicKey.setId(id);
-
-        ExampleMatcher matcher = ExampleMatcher.matching()
-                .withMatcher("keystore", exact())
-                .withMatcher("id", exact());
-
-        Optional<PublicKey> foundPublicKey = publicKeyRepository.findOne(Example.of(publicKey, matcher));
-        if (foundPublicKey.isEmpty()) {
-            throw new PublicKeyNotFoundException(id);
-        }
+    @GetMapping("/api/v1/keystores/{keystoreId}/keys/{id}")
+    @PreAuthorize("isAuthenticated()")
+    MappingJacksonValue one(@PathVariable Long keystoreId, @PathVariable Long id) {
+        Optional<PublicKey> foundPublicKey = getPublicKeyIfExists(keystoreId, id);
 
         MappingJacksonValue mapping = new MappingJacksonValue(assembler.toModel(foundPublicKey.get()));
         mapping.setFilters(KeystoreController.CLIENT_FILTER_PROVIDER);
@@ -60,13 +48,10 @@ public class PublicKeyController {
         return mapping;
     }
 
-    @GetMapping("/clients/{clientId}/keystores/{keystoreId}/keys")
-    MappingJacksonValue all(@PathVariable Long clientId, @PathVariable Long keystoreId) {
-        Keystore keystore = keystoreRepository.findById(keystoreId).orElseThrow(() -> new KeystoreNotFoundException(keystoreId));
-        if (!keystore.getClient().getId().equals(clientId)) {
-            throw new ClientNotFoundException(clientId);
-        }
-
+    @GetMapping("/api/v1/keystores/{keystoreId}/keys")
+    @PreAuthorize("isAuthenticated()")
+    MappingJacksonValue all(@PathVariable Long keystoreId) {
+        Keystore keystore = getKeystoreIfExists(keystoreId);
         PublicKey publicKey = new PublicKey();
         publicKey.setKeystore(keystore);
 
@@ -82,9 +67,12 @@ public class PublicKeyController {
         return mapping;
     }
 
-    @PostMapping("/clients/{clientId}/keystores/{keystoreId}/keys")
-    MappingJacksonValue newPublicKey(@PathVariable Long clientId, @PathVariable Long keystoreId, @RequestBody PublicKey newPublicKey) {
-        // TODO: Protect by client API key
+    @PostMapping("/api/v1/keystores/{keystoreId}/keys")
+    @PreAuthorize("isAuthenticated()")
+    MappingJacksonValue newPublicKey(@PathVariable Long keystoreId, @RequestBody PublicKey newPublicKey) {
+        Keystore keystore = getKeystoreIfExists(keystoreId);
+        newPublicKey.setKeystore(keystore);
+
         EntityModel<PublicKey> resource = assembler.toModel(publicKeyRepository.save(newPublicKey));
         MappingJacksonValue mapping = new MappingJacksonValue(resource);
         mapping.setFilters(KeystoreController.CLIENT_FILTER_PROVIDER);
@@ -92,10 +80,10 @@ public class PublicKeyController {
         return mapping;
     }
 
-    @PutMapping("/clients/{clientId}/keystores/{keystoreId}/keys/{id}")
-    MappingJacksonValue replacePublicKey(@RequestBody PublicKey newPublicKey, @PathVariable Long clientId, @PathVariable Long keystoreId, @PathVariable Long id) {
-        // TODO: Protect by client API
-        one(clientId, keystoreId, id);
+    @PutMapping("/api/v1/keystores/{keystoreId}/keys/{id}")
+    @PreAuthorize("isAuthenticated()")
+    MappingJacksonValue replacePublicKey(@PathVariable Long keystoreId, @PathVariable Long id, @RequestBody PublicKey newPublicKey) {
+        getKeystoreIfExists(keystoreId);
 
         PublicKey replacedPublicKey = publicKeyRepository.findById(id)
                 .map(publicKey -> {
@@ -113,10 +101,40 @@ public class PublicKeyController {
         return mapping;
     }
 
-    @DeleteMapping("/clients/{clientId}/keystores/{keystoreId}/keys/{id}")
-    void deleteKeystore(@PathVariable Long clientId, @PathVariable Long keystoreId, @PathVariable Long id) {
-        // TODO: Protect by client API key
-        one(clientId, keystoreId, id);
+    @DeleteMapping("/api/v1/keystores/{keystoreId}/keys/{id}")
+    @PreAuthorize("isAuthenticated()")
+    void deletePublicKey(@PathVariable Long keystoreId, @PathVariable Long id) {
+        getPublicKeyIfExists(keystoreId, id);
         publicKeyRepository.deleteById(id);
+    }
+
+    Optional<PublicKey> getPublicKeyIfExists(Long keystoreId, Long id) {
+        Keystore keystore = getKeystoreIfExists(keystoreId);
+
+        PublicKey publicKey = new PublicKey();
+        publicKey.setId(id);
+        publicKey.setKeystore(keystore);
+
+        ExampleMatcher matcher = ExampleMatcher.matching()
+                .withMatcher("keystore", exact())
+                .withMatcher("id", exact());
+
+        Optional<PublicKey> foundPublicKey = publicKeyRepository.findOne(Example.of(publicKey, matcher));
+        if (foundPublicKey.isEmpty()) {
+            throw new PublicKeyNotFoundException(id);
+        }
+
+        return foundPublicKey;
+    }
+
+    Keystore getKeystoreIfExists(Long keystoreId) {
+        Client client = authenticatedClient.getClient();
+
+        Keystore keystore = keystoreRepository.findById(keystoreId).orElseThrow(() -> new KeystoreNotFoundException(keystoreId));
+        if (!keystore.getClient().getId().equals(client.getId())) {
+            throw new ClientNotFoundException(client.getId());
+        }
+
+        return keystore;
     }
 }

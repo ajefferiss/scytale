@@ -13,9 +13,8 @@ public class PublicKeyModelAssembler implements RepresentationModelAssembler<Pub
     @Override
     public EntityModel<PublicKey> toModel(PublicKey publicKey) {
         Long keystoreId = publicKey.getKeystore().getId();
-        Long clientId = publicKey.getKeystore().getClient().getId();
         return EntityModel.of(publicKey,
-                linkTo(methodOn(PublicKeyController.class).one(clientId, keystoreId, publicKey.getId())).withSelfRel(),
-                linkTo(methodOn(PublicKeyController.class).all(clientId, keystoreId)).withRel("keystores"));
+                linkTo(methodOn(PublicKeyController.class).one(keystoreId, publicKey.getId())).withSelfRel(),
+                linkTo(methodOn(PublicKeyController.class).all(keystoreId)).withRel("keystores"));
     }
 }

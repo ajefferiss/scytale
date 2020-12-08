@@ -2,7 +2,7 @@ package com.openmoments.scytale.utils;
 
 import java.security.SecureRandom;
 
-public class KeyGenerator {
+public class APIKeyGenerator {
     public static int API_KEY_LENGTH = 40;
     private static final String KEY_CHARACTERS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_-";
     private static final SecureRandom RNG = new SecureRandom();
@@ -10,13 +10,13 @@ public class KeyGenerator {
     private int keyLength = API_KEY_LENGTH;
 
 
-    public KeyGenerator() {}
+    public APIKeyGenerator() {}
 
     public String buildKey() {
         return generateKey();
     }
 
-    public KeyGenerator length(int keyLength) {
+    public APIKeyGenerator length(int keyLength) {
         this.keyLength = keyLength;
         return this;
     }
