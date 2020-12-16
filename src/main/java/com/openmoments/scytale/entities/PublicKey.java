@@ -13,7 +13,7 @@ public class PublicKey {
     @JoinColumn(name = "keystore_id")
     private Keystore keystore;
 
-    @Column(nullable = false, unique = true)
+    @Column(columnDefinition = "text NOT NULL UNIQUE")
     private String publicKey;
 
     public PublicKey() {}
