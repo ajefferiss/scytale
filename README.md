@@ -3,10 +3,7 @@
 A RESTful API package for the distribution of encryption keys. This API, along with shared-libraries will help you, the developer, implement end-to-end encryption within your applications.
 
 ## Features
-This packages provides the following, and more:
-
-- Key distribution
-- 
+This packages provides distribution through a REST API of Public Keys for use within E2EE.
 
 ## Documentation
 
@@ -14,7 +11,8 @@ Please refer to the [Scytale wiki](https://github.com/ajefferiss/scytale/wiki) f
 
 ## API Example Usage
 If you are looking at incorporating this API into a project, take a look at the example applications:
-- [Java](/examples/java/)
+- [cURL](/examples/rest)
+- [Java](https://github.com/ajefferiss/scytale-java/tree/main/src/main/java/com/openmoments/scytale/samples)
 
 ## Support
 
